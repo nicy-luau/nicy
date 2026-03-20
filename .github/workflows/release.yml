@@ -1,0 +1,146 @@
+name: 🚀 Nicy CLI Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: 🏗️ Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: win-msvc-x64, target: x86_64-pc-windows-msvc, os: windows-latest, use_msvc: true }
+          - { name: win-msvc-x86, target: i686-pc-windows-msvc, os: windows-latest, use_msvc: true }
+          - { name: win-msvc-arm, target: aarch64-pc-windows-msvc, os: windows-latest, use_msvc: true }
+          - { name: win-gnu-x64, target: x86_64-pc-windows-gnu, os: windows-latest }
+          - { name: win-gnu-x86, target: i686-pc-windows-gnu, os: windows-latest }
+          - { name: mac-x64, target: x86_64-apple-darwin, os: macos-latest }
+          - { name: mac-arm, target: aarch64-apple-darwin, os: macos-latest }
+          - { name: linux-x64, target: x86_64-unknown-linux-gnu.2.17, os: ubuntu-latest }
+          - { name: linux-arm, target: aarch64-unknown-linux-gnu.2.17, os: ubuntu-latest }
+          - { name: linux-x86, target: i686-unknown-linux-gnu.2.17, os: ubuntu-latest }
+          - { name: android-arm64, target: aarch64-linux-android, os: ubuntu-latest, use_cross: true }
+          - { name: android-v7, target: armv7-linux-androideabi, os: ubuntu-latest, use_cross: true }
+
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🦀 Setup Rust Nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+
+      - name: 🎯 Install Target
+        run: |
+          $pureTarget = "${{ matrix.target }}".Split(".")[0]
+          rustup target add $pureTarget
+        shell: pwsh
+
+      - name: 🗜️ Setup UPX
+        if: runner.os != 'macOS'
+        uses: crazy-max/ghaction-upx@v3
+        with:
+          install-only: true
+
+      - name: ⚡ Setup Zig
+        if: ${{ !matrix.use_cross && !matrix.use_msvc }}
+        uses: goto-bus-stop/setup-zig@v2
+
+      - name: 📦 Install Tools
+        run: |
+          if ("${{ matrix.use_cross }}" -eq "true") {
+            cargo install cross --git https://github.com/cross-rs/cross
+          } elseif ("${{ matrix.use_msvc }}" -ne "true") {
+            cargo install cargo-zigbuild
+          }
+        shell: pwsh
+
+      - name: 🛠️ Build Engine
+        run: |
+          if ("${{ matrix.use_cross }}" -eq "true") {
+            $base = "cross"
+            $sub = "build"
+          } elseif ("${{ matrix.use_msvc }}" -eq "true") {
+            $base = "cargo"
+            $sub = "build"
+          } else {
+            $base = "cargo"
+            $sub = "zigbuild"
+          }
+          
+          $env:CARGO_PROFILE_RELEASE_STRIP = if ("${{ matrix.name }}" -like "mac-*" -or "${{ matrix.use_msvc }}" -eq "true") { "false" } else { "true" }
+          
+          $rustflags = "-C link-arg=-s"
+          
+          if ("${{ matrix.target }}" -like "aarch64-*") {
+            Set-Content -Path "libunwind.a" -Value "!<arch>`n" -NoNewline
+            $rustflags += " -L ."
+            if ("${{ matrix.target }}" -eq "aarch64-linux-android") { 
+              $rustflags += " -C link-arg=-lc++_shared" 
+            }
+          }
+
+          $env:RUSTFLAGS = $rustflags
+          Invoke-Expression "$base +nightly $sub --release --target ${{ matrix.target }} -Z build-std=std,core,alloc,compiler_builtins"
+        shell: pwsh
+
+      - name: 🗜️ Compress Binary (UPX)
+        run: |
+          $cleanTarget = "${{ matrix.target }}".Replace(".2.17", "")
+          $outDir = "target/$cleanTarget/release"
+          
+          if ("${{ matrix.name }}" -like "win-*") { $f = "nicy.exe" }
+          else { $f = "nicy" }
+          
+          $binPath = "$outDir/$f"
+          
+          if (Test-Path $binPath) {
+            Write-Host "Binario encontrado: $binPath" -ForegroundColor Green
+            
+            if ("${{ matrix.name }}" -like "mac-*" -or "${{ matrix.target }}" -like "aarch64-pc-windows-*") {
+              Write-Host "UPX Skip: ${{ matrix.name }}" -ForegroundColor Gray
+            } else {
+              upx --ultra-brute --lzma $binPath
+            }
+          } else {
+            Write-Host "Erro: Binario nao encontrado pra compressao!" -ForegroundColor Red
+            exit 1
+          }
+        shell: pwsh
+
+      - name: 📂 Organize Artifacts
+        run: |
+          $cleanTarget = "${{ matrix.target }}".Replace(".2.17", "")
+          $outDir = "target/$cleanTarget/release"
+          mkdir -p dist
+          
+          if ("${{ matrix.name }}" -like "win-*") { $f = "nicy.exe" }
+          else { $f = "nicy" }
+          
+          $ext = [System.IO.Path]::GetExtension($f)
+          cp "$outDir/$f" "dist/nicy-${{ matrix.name }}$ext"
+        shell: pwsh
+
+      - name: 🚢 Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body: |
+            ## 🚀 Nicy CLI - Release `${{ github.ref_name }}`
+            
+            ### 📂 Artifacts Guide
+            - `win-msvc-*`: Best for native Windows apps.
+            - `win-gnu-*`: Best for MinGW/Zig environments.
+            - `linux-*` / `mac-*` / `android-*`: Unix binaries.
+            
+            ---
+            *Built with ❤️ by yanlvl99.*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

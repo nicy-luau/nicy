@@ -1,0 +1,26 @@
+[target.aarch64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge"
+
+[target.x86_64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:edge"
+
+[target.i686-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/i686-unknown-linux-gnu:edge"
+
+[target.aarch64-apple-darwin]
+# Mudamos para o GitHub Container Registry, que é mais garantido
+image = "ghcr.io/messense/rust-macos-cross-toolchain:aarch64-apple-darwin"
+
+[target.x86_64-apple-darwin]
+image = "ghcr.io/messense/rust-macos-cross-toolchain:x86_64-apple-darwin"
+
+[build.env]
+passthrough = [
+    "CROSS_CONTAINER_UID",
+    "CROSS_CONTAINER_GID"
+]
+[target.aarch64-linux-android]
+image = "ghcr.io/cross-rs/aarch64-linux-android:latest"
+
+[target.armv7-linux-androideabi]
+image = "ghcr.io/cross-rs/armv7-linux-androideabi:latest"

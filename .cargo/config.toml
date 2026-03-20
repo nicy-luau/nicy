@@ -1,0 +1,22 @@
+# --- ANDROID (64 e 32 bits) ---
+[target.aarch64-linux-android]
+rustflags = ["-L", "libs", "-C", "link-arg=-lc", "-C", "link-arg=-lm", "-C", "link-arg=-ldl", "-C", "link-arg=-llog"]
+
+[target.armv7-linux-androideabi]
+rustflags = ["-L", "libs", "-C", "link-arg=-lc", "-C", "link-arg=-lm", "-C", "link-arg=-ldl"]
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.i686-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-apple-darwin]
+# Esse "-Wl,-x" diz pro linker do Mac: "Apaga os símbolos locais, parça!"
+rustflags = ["-C", "link-arg=-Wl,-x"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-Wl,-x"]

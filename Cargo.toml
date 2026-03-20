@@ -1,0 +1,16 @@
+
+cargo-features = ["panic-immediate-abort"]
+[package]
+name = "nicy"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libloading = "0.9"
+
+[profile.release]
+panic = "immediate-abort" 
+strip = "none"
+lto = true
+codegen-units = 1
+opt-level = "z"
