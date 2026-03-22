@@ -85,7 +85,7 @@ fn main() {
             }
 
             "version" | "--version" | "-v" => {
-                println!("nicy 0.1.0");
+                println!("nicy 0.1.1");
             }
 
             "runtime-version" | "--runtime-version" | "-rv" => {
