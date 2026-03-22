@@ -92,10 +92,12 @@ function Build-Target($name, $rustTarget, $toolchain, $manifestPath, $forceBuild
         Write-Host "Ok: $binPath" -ForegroundColor Green
         if ($name -like "mac-*" -or $name -eq "win-arm") {
             Write-Host "UPX Skip: $name" -ForegroundColor Gray
-        } elseif ($name -like "android-*") {
-            upx --ultra-brute --lzma $binPath
         } else {
             upx --ultra-brute --lzma $binPath
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "UPX Warn: falhou para $name, mantendo binario sem compressao" -ForegroundColor Yellow
+                $global:LASTEXITCODE = 0
+            }
         }
     } else {
         Write-Host "Erro build: $name" -ForegroundColor Red
