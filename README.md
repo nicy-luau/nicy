@@ -54,6 +54,16 @@ The CLI is structured to be as minimal as possible:
 
 - `main.rs`: The main entry point, CLI argument parsing, command routing (`run`, `eval`, `compile`, `help`), and dynamic linking via `libloading` to the core engine.
 
+## Build
+
+- Stable manifest: `Cargo.toml` (`panic = "abort"`).
+- Nightly manifest: `nightly/Cargo.toml` (`panic = "immediate-abort"`).
+
+```powershell
+./build.ps1 -target win-x64 -toolchain stable -force
+./build.ps1 -target win-x64 -toolchain nightly -force
+```
+
 ## License
 
 This project is licensed under the Mozilla Public License 2.0. See the [LICENSE](LICENSE) file for details.

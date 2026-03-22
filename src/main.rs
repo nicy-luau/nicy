@@ -37,12 +37,26 @@ unsafe fn load_nicy_lib() -> Library {
         .and_then(|p| p.parent().map(|d| d.join(dll_name)))
         .unwrap_or_else(|| PathBuf::from(dll_name));
 
-    let lib_result = unsafe { Library::new(&local_dll).or_else(|_| Library::new(dll_name)) };
+    let local_try = unsafe { Library::new(&local_dll) };
+    if let Ok(lib) = local_try {
+        return lib;
+    }
 
-    match lib_result {
-        Ok(l) => l,
-        Err(e) => {
-            eprintln!("[FATAL] Coudn't load library '{}'. Check if it's in the same directory as the executable or in the PATH. Error: {}", dll_name, e);
+    let local_err = local_try
+        .err()
+        .map(|e| e.to_string())
+        .unwrap_or_else(|| "unknown local load error".to_string());
+
+    match unsafe { Library::new(dll_name) } {
+        Ok(lib) => lib,
+        Err(path_err) => {
+            eprintln!(
+                "[FATAL] Couldn't load '{}' from executable dir or PATH.\n- local: {} ({})\n- path: {}",
+                dll_name,
+                local_dll.display(),
+                local_err,
+                path_err
+            );
             process::exit(1);
         }
     }
@@ -78,9 +92,9 @@ fn main() {
                 let lib = load_nicy_lib();
                 
                 let get_version: Symbol<unsafe extern "C" fn() -> *const std::os::raw::c_char> = 
-                    lib.get(b"nicy_version").expect("[FATAL] Failed to load 'nicy_version'");
+                    lib.get(b"nicy_version\0").expect("[FATAL] Failed to load 'nicy_version'");
                 let get_luau_version: Symbol<unsafe extern "C" fn() -> *const std::os::raw::c_char> = 
-                    lib.get(b"nicy_luau_version").expect("[FATAL] Failed to load 'nicy_luau_version'");
+                    lib.get(b"nicy_luau_version\0").expect("[FATAL] Failed to load 'nicy_luau_version'");
 
                 let engine_ver = CStr::from_ptr(get_version()).to_string_lossy();
                 let luau_ver = CStr::from_ptr(get_luau_version()).to_string_lossy();
@@ -129,7 +143,7 @@ unsafe fn execute_file(script_rel_path: &str) {
     let c_path = CString::new(path.to_str().unwrap()).unwrap();
     
     let start: Symbol<unsafe extern "C" fn(*const std::os::raw::c_char)> = 
-        unsafe { lib.get(b"nicy_start").expect("[FATAL] Failed to load 'nicy_start' symbol from library.") };
+        unsafe { lib.get(b"nicy_start\0").expect("[FATAL] Failed to load 'nicy_start' symbol from library.") };
 
     unsafe { start(c_path.as_ptr()) };
 }
@@ -139,7 +153,7 @@ unsafe fn execute_eval(code: &str) {
     let c_code = CString::new(code).unwrap();
     
     let eval: Symbol<unsafe extern "C" fn(*const std::os::raw::c_char)> = 
-        unsafe { lib.get(b"nicy_eval").expect("[FATAL] Failed to load 'nicy_eval' symbol from library.") };
+        unsafe { lib.get(b"nicy_eval\0").expect("[FATAL] Failed to load 'nicy_eval' symbol from library.") };
 
     unsafe { eval(c_code.as_ptr()) };
 }
@@ -155,7 +169,7 @@ unsafe fn execute_compile(script_rel_path: &str) {
     let c_path = CString::new(path.to_str().unwrap()).unwrap();
     
     let compile: Symbol<unsafe extern "C" fn(*const std::os::raw::c_char)> = 
-        unsafe { lib.get(b"nicy_compile").expect("[FATAL] Failed to load 'nicy_compile' symbol from library.") };
+        unsafe { lib.get(b"nicy_compile\0").expect("[FATAL] Failed to load 'nicy_compile' symbol from library.") };
 
     unsafe { compile(c_path.as_ptr()) };
 }

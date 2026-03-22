@@ -11,6 +11,7 @@ jobs:
   build:
     name: 🏗️ Build (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.allow_failure == true }}
     strategy:
       fail-fast: false
       matrix:
@@ -18,14 +19,15 @@ jobs:
           - { name: win-msvc-x64, target: x86_64-pc-windows-msvc, os: windows-latest, use_msvc: true }
           - { name: win-msvc-x86, target: i686-pc-windows-msvc, os: windows-latest, use_msvc: true }
           - { name: win-msvc-arm, target: aarch64-pc-windows-msvc, os: windows-latest, use_msvc: true }
-          - { name: win-gnu-x64, target: x86_64-pc-windows-gnu, os: windows-latest }
-          - { name: win-gnu-x86, target: i686-pc-windows-gnu, os: windows-latest }
+          - { name: win-x64, target: x86_64-pc-windows-gnu, os: windows-latest }
+          - { name: win-x86, target: i686-pc-windows-gnu, os: windows-latest }
+          - { name: win-arm, target: aarch64-pc-windows-gnullvm, os: windows-latest, allow_failure: true }
           - { name: mac-x64, target: x86_64-apple-darwin, os: macos-latest }
           - { name: mac-arm, target: aarch64-apple-darwin, os: macos-latest }
           - { name: linux-x64, target: x86_64-unknown-linux-gnu.2.17, os: ubuntu-latest }
           - { name: linux-arm, target: aarch64-unknown-linux-gnu.2.17, os: ubuntu-latest }
           - { name: linux-x86, target: i686-unknown-linux-gnu.2.17, os: ubuntu-latest }
-          - { name: android-arm64, target: aarch64-linux-android, os: ubuntu-latest, use_cross: true }
+          - { name: android-arm, target: aarch64-linux-android, os: ubuntu-latest, use_cross: true }
           - { name: android-v7, target: armv7-linux-androideabi, os: ubuntu-latest, use_cross: true }
 
     steps:
@@ -52,6 +54,8 @@ jobs:
       - name: ⚡ Setup Zig
         if: ${{ !matrix.use_cross && !matrix.use_msvc }}
         uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.14.0
 
       - name: 📦 Install Tools
         run: |
@@ -62,56 +66,12 @@ jobs:
           }
         shell: pwsh
 
-      - name: 🛠️ Build Engine
+      - name: 🛠️ Build CLI
         run: |
-          if ("${{ matrix.use_cross }}" -eq "true") {
-            $base = "cross"
-            $sub = "build"
-          } elseif ("${{ matrix.use_msvc }}" -eq "true") {
-            $base = "cargo"
-            $sub = "build"
+          if ("${{ matrix.use_msvc }}" -eq "true") {
+            cargo +nightly build --release --target ${{ matrix.target }} --manifest-path nightly/Cargo.toml --target-dir target -Z build-std=std,core,alloc,compiler_builtins,panic_abort
           } else {
-            $base = "cargo"
-            $sub = "zigbuild"
-          }
-          
-          $env:CARGO_PROFILE_RELEASE_STRIP = if ("${{ matrix.name }}" -like "mac-*" -or "${{ matrix.use_msvc }}" -eq "true") { "false" } else { "true" }
-          
-          $rustflags = "-C link-arg=-s"
-          
-          if ("${{ matrix.target }}" -like "aarch64-*") {
-            Set-Content -Path "libunwind.a" -Value "!<arch>`n" -NoNewline
-            $rustflags += " -L ."
-            if ("${{ matrix.target }}" -eq "aarch64-linux-android") { 
-              $rustflags += " -C link-arg=-lc++_shared" 
-            }
-          }
-
-          $env:RUSTFLAGS = $rustflags
-          Invoke-Expression "$base +nightly $sub --release --target ${{ matrix.target }} -Z build-std=std,core,alloc,compiler_builtins"
-        shell: pwsh
-
-      - name: 🗜️ Compress Binary (UPX)
-        run: |
-          $cleanTarget = "${{ matrix.target }}".Replace(".2.17", "")
-          $outDir = "target/$cleanTarget/release"
-          
-          if ("${{ matrix.name }}" -like "win-*") { $f = "nicy.exe" }
-          else { $f = "nicy" }
-          
-          $binPath = "$outDir/$f"
-          
-          if (Test-Path $binPath) {
-            Write-Host "Binario encontrado: $binPath" -ForegroundColor Green
-            
-            if ("${{ matrix.name }}" -like "mac-*" -or "${{ matrix.target }}" -like "aarch64-pc-windows-*") {
-              Write-Host "UPX Skip: ${{ matrix.name }}" -ForegroundColor Gray
-            } else {
-              upx --ultra-brute --lzma $binPath
-            }
-          } else {
-            Write-Host "Erro: Binario nao encontrado pra compressao!" -ForegroundColor Red
-            exit 1
+            ./build.ps1 -target "${{ matrix.name }}" -toolchain nightly -force
           }
         shell: pwsh
 
@@ -120,10 +80,10 @@ jobs:
           $cleanTarget = "${{ matrix.target }}".Replace(".2.17", "")
           $outDir = "target/$cleanTarget/release"
           mkdir -p dist
-          
+
           if ("${{ matrix.name }}" -like "win-*") { $f = "nicy.exe" }
           else { $f = "nicy" }
-          
+
           $ext = [System.IO.Path]::GetExtension($f)
           cp "$outDir/$f" "dist/nicy-${{ matrix.name }}$ext"
         shell: pwsh
@@ -134,13 +94,17 @@ jobs:
           files: dist/*
           body: |
             ## 🚀 Nicy CLI - Release `${{ github.ref_name }}`
-            
+
+            ### 📋 Changelog
+            - Standardized stable/nightly manifests using `nightly/Cargo.toml` for nightly-only features.
+            - Standardized build pipeline with `build.ps1 -toolchain nightly -force` for GNU/Zig/Cross targets.
+            - Added explicit MSVC nightly build path with `--manifest-path nightly/Cargo.toml`.
+            - Added resilient Windows ARM GNU handling (`allow_failure`) and pinned Zig to `0.14.0`.
+
             ### 📂 Artifacts Guide
-            - `win-msvc-*`: Best for native Windows apps.
-            - `win-gnu-*`: Best for MinGW/Zig environments.
-            - `linux-*` / `mac-*` / `android-*`: Unix binaries.
-            
-            ---
-            *Built with ❤️ by yanlvl99.*
+            - `win-msvc-*`: Native Windows MSVC builds.
+            - `win-*`: Windows GNU builds.
+            - `linux-*`: Compatible with GLIBC 2.17+.
+            - `mac-* / android-*`: Unix and mobile targets.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,14 +1,19 @@
+cargo-features = ["panic-immediate-abort"]
 
 [package]
 name = "nicy"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "nicy"
+path = "../src/main.rs"
+
 [dependencies]
 libloading = "0.9"
 
 [profile.release]
-panic = "abort"
+panic = "immediate-abort"
 strip = "none"
 lto = true
 codegen-units = 1
