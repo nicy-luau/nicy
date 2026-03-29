@@ -1,0 +1,100 @@
+name: Nicy CLI Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.allow_failure == true }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: win-msvc-x64, target: x86_64-pc-windows-msvc, os: windows-latest, use_msvc: true }
+          - { name: win-msvc-x86, target: i686-pc-windows-msvc, os: windows-latest, use_msvc: true }
+          - { name: win-msvc-arm, target: aarch64-pc-windows-msvc, os: windows-latest, use_msvc: true, allow_failure: true }
+          - { name: win-x64, target: x86_64-pc-windows-gnu, os: windows-latest }
+          - { name: win-x86, target: i686-pc-windows-gnu, os: windows-latest }
+          - { name: win-arm, target: aarch64-pc-windows-gnullvm, os: windows-latest, allow_failure: true }
+          - { name: mac-x64, target: x86_64-apple-darwin, os: macos-latest }
+          - { name: mac-arm, target: aarch64-apple-darwin, os: macos-latest }
+          - { name: linux-x64, target: x86_64-unknown-linux-gnu.2.17, os: ubuntu-latest }
+          - { name: linux-arm, target: aarch64-unknown-linux-gnu.2.17, os: ubuntu-latest }
+          - { name: linux-x86, target: i686-unknown-linux-gnu.2.17, os: ubuntu-latest }
+          - { name: android-arm, target: aarch64-linux-android, os: ubuntu-latest, use_cross: true }
+          - { name: android-v7, target: armv7-linux-androideabi, os: ubuntu-latest, use_cross: true }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust Stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Target
+        shell: pwsh
+        run: |
+          $pureTarget = "${{ matrix.target }}".Split(".")[0]
+          rustup target add $pureTarget
+
+      - name: Setup Zig
+        if: ${{ !matrix.use_cross && !matrix.use_msvc }}
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.14.0
+
+      - name: Install Tools
+        shell: pwsh
+        run: |
+          if ("${{ matrix.use_cross }}" -eq "true") {
+            cargo install cross --git https://github.com/cross-rs/cross --locked
+          } elseif ("${{ matrix.use_msvc }}" -ne "true") {
+            cargo install cargo-zigbuild --locked
+          }
+
+      - name: Build
+        shell: pwsh
+        run: |
+          if ("${{ matrix.use_msvc }}" -eq "true") {
+            cargo build --release --target ${{ matrix.target }} --manifest-path Cargo.toml --target-dir target
+          } else {
+            ./build.ps1 -target "${{ matrix.name }}" -force
+          }
+
+      - name: Package Artifact
+        shell: pwsh
+        run: |
+          $cleanTarget = "${{ matrix.target }}".Replace(".2.17", "")
+          $outDir = "target/$cleanTarget/release"
+          $fileName = if ("${{ matrix.name }}" -like "win-*") { "nicy.exe" } else { "nicy" }
+          $sourcePath = Join-Path $outDir $fileName
+
+          if (-not (Test-Path $sourcePath)) {
+            throw "Binary not found: $sourcePath"
+          }
+
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $artifactDir = "dist/nicy-${{ matrix.name }}"
+          New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
+
+          Copy-Item $sourcePath (Join-Path $artifactDir $fileName) -Force
+          Compress-Archive -Path "$artifactDir/*" -DestinationPath "dist/nicy-${{ matrix.name }}.zip" -Force
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          fail_on_unmatched_files: true
+          body: |
+            nicy CLI ${{ github.ref_name }}
+            - rust toolchain: stable
+            - no binary compression
+            - artifacts: zip per target with canonical executable name inside
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
