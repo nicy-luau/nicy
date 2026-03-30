@@ -34,6 +34,46 @@ fn runtime_library_basename() -> &'static str {
     }
 }
 
+#[cfg(target_os = "android")]
+fn termux_prefix() -> PathBuf {
+    env::var("PREFIX")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/data/data/com.termux/files/usr"))
+}
+
+#[cfg(target_os = "android")]
+fn android_runtime_candidates(base: &str) -> Vec<PathBuf> {
+    let prefix = termux_prefix();
+    vec![
+        prefix.join("lib").join(base),
+        prefix.join("bin").join(base),
+        PathBuf::from("/data/data/com.termux/files/usr/lib").join(base),
+        PathBuf::from("/data/data/com.termux/files/usr/bin").join(base),
+    ]
+}
+
+#[cfg(target_os = "android")]
+fn preload_android_libcxx(errors: &mut Vec<String>) {
+    let prefix = termux_prefix();
+    let candidates = vec![
+        prefix.join("lib").join("libc++_shared.so"),
+        prefix.join("bin").join("libc++_shared.so"),
+        PathBuf::from("/data/data/com.termux/files/usr/lib/libc++_shared.so"),
+        PathBuf::from("/data/data/com.termux/files/usr/bin/libc++_shared.so"),
+    ];
+
+    for candidate in candidates {
+        let load_result = unsafe { Library::new(&candidate) };
+        match load_result {
+            Ok(lib) => {
+                std::mem::forget(lib);
+                return;
+            }
+            Err(err) => errors.push(format!("preload {}: {}", candidate.display(), err)),
+        }
+    }
+}
+
 fn runtime_library_prefix_and_ext() -> (&'static str, &'static str) {
     if cfg!(target_os = "windows") {
         ("nicyrtdyn", ".dll")
@@ -75,6 +115,18 @@ fn collect_local_library_candidates() -> Vec<PathBuf> {
 fn load_nicy_lib() -> Result<Library, String> {
     let base = runtime_library_basename();
     let mut errors = Vec::new();
+
+    #[cfg(target_os = "android")]
+    preload_android_libcxx(&mut errors);
+
+    #[cfg(target_os = "android")]
+    for candidate in android_runtime_candidates(base) {
+        let load_result = unsafe { Library::new(&candidate) };
+        match load_result {
+            Ok(lib) => return Ok(lib),
+            Err(err) => errors.push(format!("android {}: {}", candidate.display(), err)),
+        }
+    }
 
     for candidate in collect_local_library_candidates() {
         let load_result = unsafe { Library::new(&candidate) };
