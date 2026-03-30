@@ -24,8 +24,8 @@ jobs:
           - { name: linux-x64, target: x86_64-unknown-linux-gnu.2.17, os: ubuntu-latest }
           - { name: linux-arm, target: aarch64-unknown-linux-gnu.2.17, os: ubuntu-latest }
           - { name: linux-x86, target: i686-unknown-linux-gnu.2.17, os: ubuntu-latest }
-          - { name: android-arm, target: aarch64-linux-android, os: ubuntu-latest }
-          - { name: android-v7, target: armv7-linux-androideabi, os: ubuntu-latest }
+          - { name: android-arm, target: aarch64-linux-android, os: ubuntu-latest, use_ndk: true }
+          - { name: android-v7, target: armv7-linux-androideabi, os: ubuntu-latest, use_ndk: true }
 
     steps:
       - name: Checkout
@@ -41,15 +41,23 @@ jobs:
           rustup target add $pureTarget
 
       - name: Setup Zig
-        if: ${{ !matrix.use_cross && !matrix.use_msvc }}
+        if: ${{ !matrix.use_ndk && !matrix.use_cross && !matrix.use_msvc }}
         uses: goto-bus-stop/setup-zig@v2
         with:
           version: 0.14.0
 
+      - name: Setup Android NDK
+        if: ${{ matrix.use_ndk == true }}
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+
       - name: Install Tools
         shell: pwsh
         run: |
-          if ("${{ matrix.use_cross }}" -eq "true") {
+          if ("${{ matrix.use_ndk }}" -eq "true") {
+            cargo install cargo-ndk --locked
+          } elseif ("${{ matrix.use_cross }}" -eq "true") {
             cargo install cross --git https://github.com/cross-rs/cross --locked
           } elseif ("${{ matrix.use_msvc }}" -ne "true") {
             cargo install cargo-zigbuild --locked
@@ -60,6 +68,8 @@ jobs:
         run: |
           if ("${{ matrix.use_msvc }}" -eq "true") {
             cargo build --release --target ${{ matrix.target }} --manifest-path Cargo.toml --target-dir target
+          } elseif ("${{ matrix.use_ndk }}" -eq "true") {
+            cargo ndk -t ${{ matrix.target }} build --release --manifest-path Cargo.toml --target-dir target
           } else {
             ./build.ps1 -target "${{ matrix.name }}" -force
           }
