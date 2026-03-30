@@ -24,8 +24,8 @@ jobs:
           - { name: linux-x64, target: x86_64-unknown-linux-gnu.2.17, os: ubuntu-latest }
           - { name: linux-arm, target: aarch64-unknown-linux-gnu.2.17, os: ubuntu-latest }
           - { name: linux-x86, target: i686-unknown-linux-gnu.2.17, os: ubuntu-latest }
-          - { name: android-arm, target: aarch64-linux-android, os: ubuntu-latest, use_cross: true }
-          - { name: android-v7, target: armv7-linux-androideabi, os: ubuntu-latest, use_cross: true }
+          - { name: android-arm, target: aarch64-linux-android, os: ubuntu-latest }
+          - { name: android-v7, target: armv7-linux-androideabi, os: ubuntu-latest }
 
     steps:
       - name: Checkout
