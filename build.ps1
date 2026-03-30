@@ -67,18 +67,13 @@ function Invoke-Build([string]$name, [string]$rustTarget, [switch]$forceBuild, [
         }
     }
 
-    if ($name -like "android-*") {
-        Assert-Command "cross"
-        cross build --release --target $rustTarget --manifest-path Cargo.toml --target-dir target
+    Assert-Command "cargo"
+    if ($useDefaultTarget) {
+        cargo build --release --manifest-path Cargo.toml --target-dir target
+    } elseif ($name -like "win-*") {
+        cargo build --release --target $rustTarget --manifest-path Cargo.toml --target-dir target
     } else {
-        Assert-Command "cargo"
-        if ($useDefaultTarget) {
-            cargo build --release --manifest-path Cargo.toml --target-dir target
-        } elseif ($name -like "win-*") {
-            cargo build --release --target $rustTarget --manifest-path Cargo.toml --target-dir target
-        } else {
-            cargo zigbuild --release --target $rustTarget --manifest-path Cargo.toml --target-dir target
-        }
+        cargo zigbuild --release --target $rustTarget --manifest-path Cargo.toml --target-dir target
     }
 
     if ($LASTEXITCODE -ne 0) {
