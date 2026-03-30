@@ -1,9 +1,9 @@
 # --- ANDROID (64 e 32 bits) ---
 [target.aarch64-linux-android]
-rustflags = ["-L", "libs"]
+rustflags = ["-L", "libs", "-C", "link-arg=-lc", "-C", "link-arg=-lm", "-C", "link-arg=-ldl", "-C", "link-arg=-llog"]
 
 [target.armv7-linux-androideabi]
-rustflags = ["-L", "libs"]
+rustflags = ["-L", "libs", "-C", "link-arg=-lc", "-C", "link-arg=-lm", "-C", "link-arg=-ldl"]
 
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]

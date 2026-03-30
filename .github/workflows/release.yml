@@ -58,10 +58,36 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
+          $target = "${{ matrix.target }}"
+          $buildOk = $true
+
           if ("${{ matrix.use_msvc }}" -eq "true") {
-            cargo build --release --target ${{ matrix.target }} --manifest-path Cargo.toml --target-dir target
+            cargo build --release --target $target --manifest-path Cargo.toml --target-dir target
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "Build primario falhou. Tentando fallback seguro (clean + rebuild)..." -ForegroundColor Yellow
+              cargo clean --target $target
+              cargo build --release --target $target --manifest-path Cargo.toml --target-dir target
+              if ($LASTEXITCODE -ne 0) { $buildOk = $false }
+            }
           } else {
             ./build.ps1 -target "${{ matrix.name }}" -force
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "Build primario falhou. Tentando fallback seguro..." -ForegroundColor Yellow
+
+              if ("${{ matrix.use_cross }}" -eq "true") {
+                cross build --release --target $target --manifest-path Cargo.toml --target-dir target
+              } elseif ("${{ matrix.name }}" -like "win-*") {
+                cargo build --release --target $target --manifest-path Cargo.toml --target-dir target
+              } else {
+                cargo zigbuild --release --target $target --manifest-path Cargo.toml --target-dir target
+              }
+
+              if ($LASTEXITCODE -ne 0) { $buildOk = $false }
+            }
+          }
+
+          if (-not $buildOk) {
+            throw "Build falhou no modo primario e no fallback para target $target"
           }
 
       - name: Package Artifact
