@@ -33,7 +33,7 @@ When running scripts through the `nicy` CLI, the following APIs are exposed to y
 A global `runtime` object is available for host interaction:
 
 - `runtime.version`: The version of the underlying `nicyrtdyn` library.
-- `runtime.hasJIT(path?: string)`: Returns `true` if JIT/CodeGen is active for a module path. Without argument, checks the current file.
+- `runtime.hasJIT(path?: string)`: Returns `true` if JIT/CodeGen is active for a module path. Without argument, checks the current file. On Android/Termux builds this returns `false` because runtime CodeGen is disabled there for stability.
 - `runtime.entry_file`: The path to the main script being executed.
 - `runtime.entry_dir`: The directory of the main script.
 - `runtime.loadlib(path: string)`: Loads a dynamic library. The path can be relative and use the `@self` alias.
